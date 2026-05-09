@@ -35,4 +35,8 @@ contract Fallback {
         require(msg.value > 0 && contributions[msg.sender] > 0);
         owner = msg.sender;
     }
+    fallback() external payable {
+        require(msg.value > 0 && contributions[msg.sender] > 0);
+        owner = msg.sender;
+    }
 }
