@@ -1,0 +1,3 @@
+[submodule "Ethernaut_Fallout/lib/openzeppelin-contracts"]
+	path = Ethernaut_Fallout/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
