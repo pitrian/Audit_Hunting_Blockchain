@@ -2,7 +2,7 @@
 
 **Date:** 24/05/2026
 
-**Prepared by:** Minh Chung (Senior Auditor)
+**Prepared by:** Minh Chung (junior Auditor)
 
 **Project:** Ethernaut Level 5 - Token
 
@@ -10,7 +10,7 @@
 
 ## 1. Executive Summary
 
-Hợp đồng `Token` được thiết kế để triển khai một hệ thống chuyển tiền token ERC-20 đơn giản, quản lý nguồn cung và số dư của người dùng. Tuy nhiên, qua quá trình kiểm toán thực tế, chúng tôi đã phát hiện một lỗ hổng **Integer Underflow** cực kỳ nghiêm trọng trong hàm `transfer`. Lỗ hổng này cho phép người dùng lách qua cơ chế kiểm tra điều kiện, tự biến số dư thấp của mình thành một con số khổng lồ, vi phạm tính toàn vẹn của tổng nguồn cung (`totalSupply`) và phá vỡ hoàn toàn kinh tế học của giao thức.
+Hợp đồng `Token` được thiết kế để triển khai một hệ thống chuyển tiền token ERC-20 đơn giản, quản lý nguồn cung và số dư của người dùng. Tuy nhiên, qua quá trình kiểm toán thực tế, chúng tôi đã phát hiện một lỗ hổng **Integer Underflow** cực kỳ nghiêm trọng trong hàm `transfer` cùng lỗi vi phạm tiêu chuẩn thiết kế ERC-20 (thiếu Event Log). Các lỗ hổng này cho phép người dùng lách qua cơ chế kiểm tra điều kiện để tự tạo ra số dư vô hạn, đồng thời làm mất khả năng theo dõi dòng tiền của các ứng dụng off-chain.
 
 ---
 
@@ -20,16 +20,17 @@ Hợp đồng `Token` được thiết kế để triển khai một hệ thốn
 | :----------- | :----------------------------------------------------------------------------------------------------------------------------- |
 | **Critical** | Lỗ hổng cho phép bypass cơ chế kiểm soát số dư, tạo ra nguồn cung vô hạn và thao túng trạng thái sổ cái một cách bất hợp pháp. |
 | **High**     | Lỗ hổng có thể dẫn đến việc phá vỡ logic cốt lõi của hợp đồng hoặc rút sạch tài sản nhưng cần một số điều kiện biên.           |
-| **Medium**   | Lỗ hổng ảnh hưởng đến logic vận hành hoặc tiêu chuẩn ERC nhưng yêu cầu điều kiện đặc biệt để khai thác.                        |
+| **Medium**   | Lỗ hổng ảnh hưởng đến logic vận hành hoặc vi phạm nghiêm trọng tiêu chuẩn ERC (EIP-20) gây lỗi tích hợp hệ thống.              |
 | **Low**      | Các lỗi liên quan đến tối ưu hóa Gas hoặc thực hành code không tốt (Best Practices).                                           |
 
 ---
 
 ## 3. Findings Summary
 
-| ID   | Title                                    | Severity | Status |
-| :--- | :--------------------------------------- | :------- | :----- |
-| C-01 | Integer Underflow in `transfer` Function | Critical | Found  |
+| ID   | Title                                                     | Severity | Status |
+| :--- | :-------------------------------------------------------- | :------- | :----- |
+| C-01 | Integer Underflow in `transfer` Function                  | Critical | Found  |
+| M-01 | Missing `Transfer` Event Emission (ERC-20 Non-compliance) | Medium   | Found  |
 
 ---
 
@@ -71,20 +72,44 @@ Giao thức cấp cho người chơi (địa chỉ ví `player`) số dư ban đ
 
 ---
 
+### [M-01] Missing `Transfer` Event Emission (ERC-20 Non-compliance)
+
+**Description:**
+Theo tiêu chuẩn token ERC-20 (EIP-20), bất kỳ hành động nào làm thay đổi số dư của các tài khoản (như hàm `transfer` và `transferFrom`) **bắt buộc** phải phát ra sự kiện `Transfer`. Tuy nhiên, trong hàm `transfer` hiện tại của hợp đồng, sự kiện này hoàn toàn bị bỏ sót sau khi trạng thái sổ cái thay đổi.
+
+**Impact:**
+* Các ứng dụng bên ngoài (Off-chain dApps), giao diện Frontend, ví điện tử (như MetaMask), và các công ty phân tích dữ liệu chuỗi (như Etherscan) dựa vào Event Logs để cập nhật số dư thời gian thực. Việc thiếu sự kiện này khiến giao dịch diễn ra trong "âm thầm", hệ thống off-chain không thể đồng bộ hóa lịch sử chuyển tiền của token.
+
+**Recommendation:**
+Khai báo sự kiện `Transfer` ở phần đầu hợp đồng và kích hoạt nó bằng từ khóa `emit` ngay trước khi kết thúc hàm `transfer`:
+```solidity
+// Khai báo ở trên cùng contract
+event Transfer(address indexed from, address indexed to, uint256 value);
+
+// Thêm vào cuối hàm transfer
+balances[msg.sender] -= _value;
+balances[_to] += _value;
+emit Transfer(msg.sender, _to, _value); // <--- SỬA TẠI ĐÂY
+return true;
+```
+
+---
+
 ## 5. Vulnerable Code Snippet
 
 ```solidity
-function transfer(address _to, uint256 _value) public returns (bool) {
-    // LỖ HỔNG CHÍ MẠNG: Phép trừ bị underflow trước khi require so sánh
-    require(balances[msg.sender] - _value >= 0); 
-    balances[msg.sender] -= _value;
-    balances[_to] += _value;
-    return true;
-}
+    function transfer(address _to, uint256 _value) public returns (bool) {
+        // LỖ HỔNG CHÍ MẠNG: Phép trừ bị underflow trước khi require so sánh
+        require(balances[msg.sender] - _value >= 0); 
+        balances[msg.sender] -= _value;
+        balances[_to] += _value;
+        // THIẾU SÓT: Không có emit Transfer(msg.sender, _to, _value); ở đây
+        return true;
+    }
 ```
 
 ---
 
 ## 6. Conclusion
 
-Hợp đồng `Token` minh họa một trong những lỗ hổng kinh điển và nguy hiểm nhất trong lịch sử bảo mật Smart Contract. Việc tính toán số học thiếu an toàn trên các hệ thống tài chính phi tập trung (DeFi) có thể dẫn đến việc phá hủy hoàn toàn giá trị của dự án. Đội ngũ kiểm toán khuyến nghị **KHÔNG** triển khai mã nguồn này lên Mainnet và yêu cầu tái cấu trúc toàn bộ các toán tử toán học theo khuyến nghị ở mục 4.
+Hợp đồng `Token` minh họa một trong những lỗ hổng kinh điển và nguy hiểm nhất trong lịch sử bảo mật Smart Contract. Việc tính toán số học thiếu an toàn kết hợp với việc không tuân thủ nghiêm ngặt tiêu chuẩn EIP-20 khiến hợp đồng này gặp rủi ro lớn cả về mặt bảo mật lẫn khả năng tích hợp hệ thống. Đội ngũ kiểm toán khuyến nghị **KHÔNG** triển khai mã nguồn này lên Mainnet và yêu cầu tái cấu trúc toàn bộ các toán tử toán học cùng Event Log theo khuyến nghị ở mục 4.
