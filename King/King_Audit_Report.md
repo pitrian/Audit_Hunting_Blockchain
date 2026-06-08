@@ -1,7 +1,9 @@
 # Smart Contract Security Audit: Ethernaut King
 
 **Date:** 02/06/2026
+
 **Prepared by:** Minh Chung
+
 **Project:** Ethernaut Level 9 - King
 
 ---

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+
 import "forge-std/Test.sol";
 
 // Interface để file test tương tác với bài King
